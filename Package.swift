@@ -17,7 +17,8 @@ let package = Package(
         .binaryTarget(
             name: "CleverVpnKit",
             url: "https://github.com/clever-vpn/clever-vpn-kit/releases/download/1.0.0/CleverVpnKit.xcframework.zip",
-            checksum: "67ec537ea6e8f1604976d78f4f87c7569a5a2329516ce2841370f6774d4859f3"
+            // path: "../apple/clever-vpn-apple-kit/DistributeTools/output/CleverVpnKit.xcframework.zip",
+            checksum: "1d2214d2857e94b0ba2219268dbbfd27a0be0a641077dc06742e67b91e6d82f8"
         ),
     ]
 )
