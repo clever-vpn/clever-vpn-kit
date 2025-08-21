@@ -6,3 +6,7 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+
+# Release management
+Package.swift.backup
+.release-config.local

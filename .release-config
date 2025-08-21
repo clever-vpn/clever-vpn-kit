@@ -1,0 +1,17 @@
+# CleverVpnKit 发布管理配置
+
+# 路径配置
+APPLE_KIT_PATH="../apple/clever-vpn-apple-kit"
+BUILD_SCRIPT_PATH="$APPLE_KIT_PATH/DistributeTools/build.sh"
+OUTPUT_PATH="$APPLE_KIT_PATH/DistributeTools/output"
+
+# 文件名配置
+FRAMEWORK_ZIP_NAME="CleverVpnKit.xcframework.zip"
+CHECKSUM_FILE_NAME="checksum.txt"
+
+# GitHub 配置
+GITHUB_REPO="clever-vpn/clever-vpn-kit"
+GITHUB_URL_TEMPLATE="https://github.com/clever-vpn/clever-vpn-kit/releases/download/{{VERSION}}/CleverVpnKit.xcframework.zip"
+
+# 本地路径配置（相对于 Package.swift）
+LOCAL_PATH="../apple/clever-vpn-apple-kit/DistributeTools/output/CleverVpnKit.xcframework.zip"
