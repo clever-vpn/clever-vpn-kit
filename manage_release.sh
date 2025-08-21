@@ -10,6 +10,7 @@ APPLE_KIT_PATH="../apple/clever-vpn-apple-kit"
 BUILD_SCRIPT="$APPLE_KIT_PATH/DistributeTools/build.sh"
 OUTPUT_DIR="$APPLE_KIT_PATH/DistributeTools/output"
 FRAMEWORK_ZIP="CleverVpnKit.xcframework.zip"
+FRAMEWORK_DIR="CleverVpnKit.xcframework"
 CHECKSUM_FILE="checksum.txt"
 PACKAGE_FILE="Package.swift"
 
@@ -56,6 +57,90 @@ check_dependencies() {
     fi
     
     log_success "依赖检查完成"
+}
+
+# 获取 Apple Kit 项目的最新版本号
+get_apple_kit_version() {
+    local quiet_mode=${1:-false}
+    
+    if [ "$quiet_mode" != "true" ]; then
+        log_info "获取 Apple Kit 项目的最新版本..."
+    fi
+    
+    if [ ! -d "$APPLE_KIT_PATH" ]; then
+        if [ "$quiet_mode" != "true" ]; then
+            log_error "Apple Kit 项目路径不存在: $APPLE_KIT_PATH"
+        fi
+        return 1
+    fi
+    
+    # 检查是否是 Git 仓库
+    if [ ! -d "$APPLE_KIT_PATH/.git" ]; then
+        if [ "$quiet_mode" != "true" ]; then
+            log_error "Apple Kit 项目不是 Git 仓库: $APPLE_KIT_PATH"
+        fi
+        return 1
+    fi
+    
+    # 切换到 Apple Kit 目录并获取最新 tag
+    local current_dir=$(pwd)
+    cd "$APPLE_KIT_PATH"
+    
+    # 先 fetch 最新的 tags（静默模式）
+    git fetch --tags > /dev/null 2>&1 || true
+    
+    # 获取最新的 tag（按语义化版本排序）
+    local latest_tag=$(git tag -l | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1)
+    
+    cd "$current_dir"
+    
+    if [ -z "$latest_tag" ]; then
+        if [ "$quiet_mode" != "true" ]; then
+            log_error "Apple Kit 项目中未找到有效的版本 tag"
+            log_info "请确保 Apple Kit 项目有类似 'v1.0.0' 或 '1.0.0' 格式的 tag"
+        fi
+        return 1
+    fi
+    
+    # 移除可能的 'v' 前缀
+    latest_tag=${latest_tag#v}
+    
+    if [ "$quiet_mode" != "true" ]; then
+        log_success "找到 Apple Kit 最新版本: $latest_tag"
+    fi
+    
+    echo "$latest_tag"
+    return 0
+}
+
+# 建议下一个版本号
+suggest_next_version() {
+    local current_version=$1
+    
+    log_info "当前版本: $current_version"
+    
+    # 验证版本号格式
+    if [[ ! "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        log_warning "版本号格式不正确，无法建议下一个版本"
+        return 1
+    fi
+    
+    # 解析版本号
+    local major=$(echo "$current_version" | cut -d. -f1)
+    local minor=$(echo "$current_version" | cut -d. -f2)
+    local patch=$(echo "$current_version" | cut -d. -f3)
+    
+    # 建议的版本号
+    local patch_version="$major.$minor.$((patch + 1))"
+    local minor_version="$major.$((minor + 1)).0"
+    local major_version="$((major + 1)).0.0"
+    
+    echo ""
+    log_info "建议的版本号:"
+    echo "  补丁版本 (patch): $patch_version"
+    echo "  次要版本 (minor): $minor_version"
+    echo "  主要版本 (major): $major_version"
+    echo ""
 }
 
 # 检查 Git 状态
@@ -118,7 +203,16 @@ restore_package() {
 switch_to_local_mode() {
     log_info "切换到本地开发模式..."
     
-    # 创建本地模式的 Package.swift
+    # 检查是否存在 xcframework 目录
+    local xcframework_path="$OUTPUT_DIR/$FRAMEWORK_DIR"
+    
+    if [ ! -d "$xcframework_path" ]; then
+        log_error "XCFramework 目录不存在: $xcframework_path"
+        log_info "请先运行构建脚本生成二进制文件"
+        exit 1
+    fi
+    
+    # 创建本地模式的 Package.swift（直接指向 xcframework 目录）
     cat > "$PACKAGE_FILE" << 'EOF'
 // swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
@@ -139,7 +233,7 @@ let package = Package(
         .binaryTarget(
             name: "CleverVpnKit",
             // url: "https://github.com/clever-vpn/clever-vpn-kit/releases/download/1.0.0/CleverVpnKit.xcframework.zip",
-            path: "../apple/clever-vpn-apple-kit/DistributeTools/output/CleverVpnKit.xcframework.zip"
+            path: "../apple/clever-vpn-apple-kit/DistributeTools/output/CleverVpnKit.xcframework"
             // checksum: "1d2214d2857e94b0ba2219268dbbfd27a0be0a641077dc06742e67b91e6d82f8"
         ),
     ]
@@ -147,6 +241,7 @@ let package = Package(
 EOF
     
     log_success "已切换到本地开发模式"
+    log_info "使用路径: $xcframework_path"
 }
 
 # 构建本地库
@@ -169,35 +264,80 @@ build_local_library() {
         exit 1
     fi
     
+    if [ ! -d "$OUTPUT_DIR/$FRAMEWORK_DIR" ]; then
+        log_error "构建失败: $OUTPUT_DIR/$FRAMEWORK_DIR 不存在"
+        exit 1
+    fi
+    
     if [ ! -f "$OUTPUT_DIR/$CHECKSUM_FILE" ]; then
         log_error "构建失败: $OUTPUT_DIR/$CHECKSUM_FILE 不存在"
         exit 1
     fi
     
     log_success "本地库构建完成"
+    log_info "生成文件:"
+    log_info "  - ZIP 文件: $OUTPUT_DIR/$FRAMEWORK_ZIP"
+    log_info "  - XCFramework: $OUTPUT_DIR/$FRAMEWORK_DIR"
+    log_info "  - Checksum: $OUTPUT_DIR/$CHECKSUM_FILE"
 }
 
+# 测试本地库
 # 测试本地库
 test_local_library() {
     log_info "测试本地库..."
     
-    # 解析 Package.swift
-    swift package describe > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        log_success "Package.swift 解析成功"
+    # 检查当前模式
+    if grep -q "^[[:space:]]*path:" "$PACKAGE_FILE"; then
+        local path=$(grep "path:" "$PACKAGE_FILE" | sed 's/.*path: "\([^"]*\)".*/\1/')
+        log_info "本地模式，检查路径: $path"
+        
+        # 检查 xcframework 目录是否存在
+        if [ ! -d "$path" ]; then
+            log_error "XCFramework 目录不存在: $path"
+            exit 1
+        fi
+        
+        # 验证 xcframework 结构
+        if [ ! -f "$path/Info.plist" ]; then
+            log_error "无效的 XCFramework，缺少 Info.plist: $path"
+            exit 1
+        fi
+        
+        log_success "XCFramework 文件验证通过"
+        
+    elif grep -q "^[[:space:]]*url:" "$PACKAGE_FILE"; then
+        log_info "发布模式，验证 URL 和 checksum 格式..."
+        
+        # 验证 URL 格式
+        local url=$(grep "url:" "$PACKAGE_FILE" | sed 's/.*url: "\([^"]*\)".*/\1/')
+        if [[ ! "$url" =~ ^https://github.com/.*/releases/download/.*/.*\.zip$ ]]; then
+            log_error "URL 格式不正确: $url"
+            exit 1
+        fi
+        
+        # 验证 checksum 格式
+        local checksum=$(grep "checksum:" "$PACKAGE_FILE" | sed 's/.*checksum: "\([^"]*\)".*/\1/')
+        if [[ ! "$checksum" =~ ^[a-f0-9]{64}$ ]]; then
+            log_error "Checksum 格式不正确 (应为64位十六进制): $checksum"
+            exit 1
+        fi
+        
+        log_success "发布模式配置验证通过"
     else
-        log_error "Package.swift 解析失败"
+        log_error "无法识别 Package.swift 模式"
         exit 1
     fi
     
-    # 构建测试
-    swift build > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        log_success "本地库测试通过"
+    # 解析 Package.swift
+    if swift package describe > /dev/null 2>&1; then
+        log_success "Package.swift 解析成功"
     else
-        log_error "本地库测试失败"
+        log_error "Package.swift 解析失败"
+        swift package describe 2>&1 | head -5
         exit 1
     fi
+    
+    log_success "库测试通过"
 }
 
 # 切换到发布模式
@@ -359,13 +499,20 @@ show_status() {
     echo ""
     
     # 显示构建文件状态
+    echo "🔨 构建文件状态:"
     if [ -f "$OUTPUT_DIR/$FRAMEWORK_ZIP" ]; then
-        echo "🔨 构建文件: ✅ $FRAMEWORK_ZIP 存在"
         local size=$(ls -lh "$OUTPUT_DIR/$FRAMEWORK_ZIP" | awk '{print $5}')
         local date=$(ls -l "$OUTPUT_DIR/$FRAMEWORK_ZIP" | awk '{print $6, $7, $8}')
-        echo "   大小: $size, 修改时间: $date"
+        echo "   ✅ ZIP文件: $FRAMEWORK_ZIP (大小: $size, 修改: $date)"
     else
-        echo "🔨 构建文件: ❌ $FRAMEWORK_ZIP 不存在"
+        echo "   ❌ ZIP文件: $FRAMEWORK_ZIP 不存在"
+    fi
+    
+    if [ -d "$OUTPUT_DIR/$FRAMEWORK_DIR" ]; then
+        local date=$(ls -ld "$OUTPUT_DIR/$FRAMEWORK_DIR" | awk '{print $6, $7, $8}')
+        echo "   ✅ XCFramework: $FRAMEWORK_DIR (修改: $date)"
+    else
+        echo "   ❌ XCFramework: $FRAMEWORK_DIR 不存在"
     fi
     
     if [ -f "$OUTPUT_DIR/$CHECKSUM_FILE" ]; then
@@ -394,6 +541,18 @@ show_status() {
         # 检查最新 tag
         local latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "无")
         echo "🏷️  最新 tag: $latest_tag"
+        
+        # 显示 Apple Kit 版本信息
+        if [ -d "$APPLE_KIT_PATH/.git" ]; then
+            local apple_kit_version=$(get_apple_kit_version true 2>/dev/null || echo "无法获取")
+            echo "🍎 Apple Kit 版本: $apple_kit_version"
+            
+            if [ "$latest_tag" != "$apple_kit_version" ] && [ "$latest_tag" != "无" ] && [ "$apple_kit_version" != "无法获取" ]; then
+                echo "   ⚠️  版本不同步，考虑运行 './manage_release.sh auto-release'"
+            fi
+        else
+            echo "🍎 Apple Kit: 路径无效或非 Git 仓库"
+        fi
     else
         echo "🌿 Git: ❌ 不在 Git 仓库中"
     fi
@@ -447,7 +606,9 @@ show_help() {
     echo ""
     echo "用法:"
     echo "  $0 local                    # 切换到本地开发模式并构建测试"
-    echo "  $0 release <version>        # 发布新版本到 GitHub"
+    echo "  $0 release <version>        # 发布指定版本到 GitHub"
+    echo "  $0 auto-release             # 自动发布基于 Apple Kit 的版本"
+    echo "  $0 version                  # 显示 Apple Kit 和当前版本信息"
     echo "  $0 status                   # 显示当前模式和状态"
     echo "  $0 build                    # 仅构建二进制库"
     echo "  $0 test                     # 仅测试当前配置"
@@ -466,10 +627,12 @@ show_help() {
     echo ""
     echo "示例:"
     echo "  $0 local                    # 本地开发测试"
+    echo "  $0 version                  # 查看版本信息"
+    echo "  $0 auto-release             # 自动发布 (推荐)"
+    echo "  $0 release 1.1.0            # 手动指定版本发布"
     echo "  $0 build                    # 仅构建库文件"
     echo "  $0 test                     # 测试当前配置"
     echo "  $0 status                   # 查看当前状态"
-    echo "  $0 release 1.1.0            # 发布版本 1.1.0"
     echo ""
     echo "注意事项:"
     echo "  - 发布前请确保在 main 分支且与远程同步"
@@ -505,6 +668,7 @@ main() {
         "release")
             if [ -z "${2:-}" ]; then
                 log_error "请指定版本号，例如: $0 release 1.1.0"
+                log_info "或使用 '$0 auto-release' 自动使用 Apple Kit 的版本号"
                 exit 1
             fi
             
@@ -514,8 +678,8 @@ main() {
             check_git_status
             
             # 确保有最新的构建
-            if [ ! -f "$OUTPUT_DIR/$FRAMEWORK_ZIP" ] || [ ! -f "$OUTPUT_DIR/$CHECKSUM_FILE" ]; then
-                log_info "未找到构建文件，开始构建..."
+            if [ ! -f "$OUTPUT_DIR/$FRAMEWORK_ZIP" ] || [ ! -d "$OUTPUT_DIR/$FRAMEWORK_DIR" ] || [ ! -f "$OUTPUT_DIR/$CHECKSUM_FILE" ]; then
+                log_info "构建文件不完整，开始构建..."
                 build_local_library
             fi
             
@@ -537,6 +701,79 @@ main() {
             
             log_success "版本 $version 发布完成！"
             log_info "Release URL: https://github.com/clever-vpn/clever-vpn-kit/releases/tag/$version"
+            ;;
+        "auto-release")
+            log_info "自动发布模式 - 基于 Apple Kit 项目版本"
+            
+            check_dependencies
+            check_git_status
+            
+            # 获取 Apple Kit 版本
+            local apple_kit_version=$(get_apple_kit_version)
+            
+            # 检查本仓库是否已有此版本的 tag
+            if git tag -l | grep -q "^$apple_kit_version$"; then
+                log_warning "版本 $apple_kit_version 已存在于本仓库"
+                suggest_next_version "$apple_kit_version"
+                
+                read -p "是否要使用建议的补丁版本? (y/N): " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    local major=$(echo "$apple_kit_version" | cut -d. -f1)
+                    local minor=$(echo "$apple_kit_version" | cut -d. -f2)
+                    local patch=$(echo "$apple_kit_version" | cut -d. -f3)
+                    apple_kit_version="$major.$minor.$((patch + 1))"
+                    log_info "使用版本: $apple_kit_version"
+                else
+                    log_error "发布取消"
+                    exit 1
+                fi
+            fi
+            
+            # 确保有最新的构建
+            if [ ! -f "$OUTPUT_DIR/$FRAMEWORK_ZIP" ] || [ ! -d "$OUTPUT_DIR/$FRAMEWORK_DIR" ] || [ ! -f "$OUTPUT_DIR/$CHECKSUM_FILE" ]; then
+                log_info "构建文件不完整，开始构建..."
+                build_local_library
+            fi
+            
+            # 读取 checksum
+            local checksum=$(cat "$OUTPUT_DIR/$CHECKSUM_FILE")
+            log_info "使用 checksum: $checksum"
+            
+            # 切换到发布模式
+            switch_to_release_mode "$apple_kit_version" "$checksum"
+            
+            # 提交更改并创建 tag
+            commit_and_push "$apple_kit_version"
+            
+            # 创建 GitHub Release（基于已存在的 tag）
+            create_github_release "$apple_kit_version"
+            
+            # 验证发布结果
+            verify_release "$apple_kit_version"
+            
+            log_success "版本 $apple_kit_version 发布完成！"
+            log_info "Release URL: https://github.com/clever-vpn/clever-vpn-kit/releases/tag/$apple_kit_version"
+            ;;
+        "version")
+            # 显示版本信息
+            echo "正在获取版本信息..."
+            
+            if local apple_kit_version=$(get_apple_kit_version true 2>/dev/null); then
+                echo "Apple Kit 最新版本: $apple_kit_version"
+            else
+                echo "Apple Kit 最新版本: 无法获取"
+                apple_kit_version="无法获取"
+            fi
+            
+            # 显示本仓库的最新 tag
+            local current_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "无")
+            echo "当前仓库最新 tag: $current_tag"
+            
+            if [ "$current_tag" != "$apple_kit_version" ] && [ "$current_tag" != "无" ] && [ "$apple_kit_version" != "无法获取" ]; then
+                echo ""
+                suggest_next_version "$apple_kit_version"
+            fi
             ;;
         "restore")
             restore_package

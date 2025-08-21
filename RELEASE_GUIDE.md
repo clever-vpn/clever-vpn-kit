@@ -12,7 +12,10 @@
 
 2. **Swift**: 确保已安装 Swift 开发工具
 
-3. **构建脚本**: 确保 `../apple/clever-vpn-apple-kit/DistributeTools/build.sh` 存在并可执行
+3. **构建脚本**: 确保 `../apple/clever-vpn-apple-kit/DistributeTools/build.sh` 已按照 [BUILD_SCRIPT_GUIDE.md](BUILD_SCRIPT_GUIDE.md) 的要求修改，能够生成三个必要文件：
+   - `CleverVpnKit.xcframework/` (目录)
+   - `CleverVpnKit.xcframework.zip` (文件)  
+   - `checksum.txt` (文件)
 
 ## 使用流程
 

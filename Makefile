@@ -1,6 +1,6 @@
 # CleverVpnKit 发布管理 Makefile
 
-.PHONY: help local build test status release clean restore
+.PHONY: help local build test status version auto-release release clean restore
 
 # 默认目标
 help:
@@ -11,6 +11,8 @@ help:
 	@echo "  make build              # 仅构建二进制库"
 	@echo "  make test               # 测试当前配置"
 	@echo "  make status             # 显示当前模式状态"
+	@echo "  make version            # 显示版本信息"
+	@echo "  make auto-release       # 自动发布基于 Apple Kit 版本"
 	@echo "  make release VERSION=x.x.x # 发布指定版本"
 	@echo "  make restore            # 恢复备份的 Package.swift"
 	@echo "  make clean              # 清理构建文件"
@@ -33,6 +35,15 @@ test:
 # 显示当前状态
 status:
 	./manage_release.sh status
+
+# 显示版本信息
+version:
+	./manage_release.sh version
+
+# 自动发布
+auto-release:
+	@echo "自动发布基于 Apple Kit 版本..."
+	./manage_release.sh auto-release
 
 # 发布版本 (需要指定 VERSION 参数)
 release:
