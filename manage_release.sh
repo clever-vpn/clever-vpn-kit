@@ -709,7 +709,13 @@ main() {
             check_git_status
             
             # 获取 Apple Kit 版本
-            local apple_kit_version=$(get_apple_kit_version)
+            log_info "获取 Apple Kit 项目的最新版本..."
+            local apple_kit_version=$(get_apple_kit_version true)
+            if [ $? -ne 0 ] || [ -z "$apple_kit_version" ]; then
+                log_error "无法获取 Apple Kit 版本"
+                exit 1
+            fi
+            log_success "找到 Apple Kit 最新版本: $apple_kit_version"
             
             # 检查本仓库是否已有此版本的 tag
             if git tag -l | grep -q "^$apple_kit_version$"; then
