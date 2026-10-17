@@ -16,9 +16,9 @@ let package = Package(
         // Targets can depend on other targets in this package and products from dependencies.
         .binaryTarget(
             name: "CleverVpnKit",
-            url: "https://github.com/clever-vpn/clever-vpn-kit/releases/download/v2.1.7/CleverVpnKit.xcframework.zip",
+            url: "https://github.com/clever-vpn/clever-vpn-kit/releases/download/v2.1.8/CleverVpnKit.xcframework.zip",
             // path: "../apple/clever-vpn-apple-kit/DistributeTools/output/CleverVpnKit.xcframework.zip",
-            checksum: "ef251a94815b7a0717f87b965c11970d664a50f8ed831221c94e2e17022c4890"
+            checksum: "c94883f28537ec50e113b89dce21f21c5f309e2ba11b4a83599e50aa71f1cf96"
         ),
     ]
 )
